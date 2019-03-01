@@ -1,6 +1,5 @@
-#!/usr/bin/env python3
+#!/usr/bin/env python2
 
-# option
 
 import sys
 import os
@@ -21,6 +20,7 @@ def read_params(args):
     parser = ArgumentParser()
     parser.add_argument("input", metavar="<input dir>", type=str, help="Input directory with joined fasta files")
     parser.add_argument("output", metavar="<output dir>", type=str, help="Output directory to write filterd fasta files")
+    parser.add_argument('-f', '--force', action="store_true", default=False, help="Force writing in directory if already exists")
     parser.add_argument('--version', action='version', version='%(prog)s {version}'.format(version=__version__))
     return vars(parser.parse_args())
 
@@ -34,7 +34,7 @@ def fasta_get_length(filepath):
     return list_length
 
 
-def int_list_summary(length_list):
+def get_stats(length_list):
     """
         From an integer list (length of fasta sequences or occurence)
         Return basic stats:
@@ -52,6 +52,16 @@ def int_list_summary(length_list):
     return {"MIN": MIN, "MAX": MAX, "MEDIAN": MEDIAN, "MEAN": MEAN, "SD": SD}
 
 
+def write_stats(length_list, filepath_out):
+    """
+        Write basics stats on filepath_out
+    """
+
+    stats = get_stats(length_list)
+    with open(filepath_out, 'w') as g:
+        g.write("MIN: {MIN}\nMAX: {MAX}\nMEDIAN: {MEDIAN}\nMEAN: {MEAN}\nSD: {SD}".format(**stats))
+
+
 def length_get_frequency(length_list):
     """
         From a list of length,
@@ -59,11 +69,12 @@ def length_get_frequency(length_list):
         and get cutoff
     """
     # int_list_summary(length_list)
-    counter = collections.Counter(length_list).most_common()  # return a list of tuple [(value, occ)]
-    length_cutoff = numpy.std(counter.values)  # CUTOFF HERE !!!
+    counter = collections.Counter(length_list)
+    length_cutoff = numpy.std(counter.values())  # CUTOFF HERE !!!
+    counter_mc = counter.most_common()  # return a list of tuple [(value, occ)]
     good_length = set()
 
-    for value, occ in counter:
+    for value, occ in counter_mc:
         if occ >= length_cutoff:
             good_length.add(value)
     return [a for a in good_length]
@@ -83,38 +94,42 @@ def check_input(input_filepath):
         and the directory contains any fasta files
     """
     if not os.path.exists(input_filepath):
-        raise IOError("<input dir> is not a valid filepath")
+        exit("Error: <input dir> is not a valid filepath")
 
     if not os.listdir(input_filepath):
-        raise IOError("<input dir> is empty")
+        exit("Error: <input dir> is empty")
 
     if not [f for f in os.listdir(input_filepath) if fasta_reg.search(f)]:
         # identify .fa or .fasta file
-        raise IOError("<input dir> contains any .fa or .fasta files.")
+        exit("Error: <input dir> contains any .fa or .fasta files.")
 
 
-def check_output(output_filepath):
+def check_output(output_filepath, force):
     """
-        check if directory exists and is writable
+        check :
+            - if output and not force : raise
+            - else : create dirs, raise OSError if permission denied
     """
 
     if not os.path.exists(output_filepath):
-        raise IOError("<output dir> is not a valid filepath")
+        try:
+            os.makedirs(output_filepath)  # possible permission denied
+        except:
+            exit("Permssion denied! You can't write in <output dir>.")
 
-    if not os.access(output_filepath, os.W_OK):
-        raise IOError("<output dir> is not a writable directory")
+    else:  # outpath not already exists
+        if not force:
+            exit("WARNING: Output folder already exists, please use -f/--force to overide it.")
 
 
 if __name__ == "__main__":
     args = read_params(sys.argv)
 
-    print args
-
     # verify if both input dir and output dir are valid
     check_input(input_filepath=args["input"])
 
     # verify output
-    check_output(output_filepath=args["output"])
+    check_output(output_filepath=args["output"], force=args["force"])
 
     # foreach fasta files of input dir get length
     length_storing = {}  # dico to store length {filename : [length]}
@@ -136,8 +151,12 @@ if __name__ == "__main__":
         filename, ext = os.path.splitext(f)
         filepath_in = "/".join([args["input"], f])
         filepath_out = "/".join([args["output"], filename + "_filtered" + ext])
-        # filepath_stat = "/".join([args["output"], filename + ".stat"])
+        filepath_stat = "/".join([args["output"], filename + ".stat"])
 
+        # write stats about length
+        write_stats(length_storing[f], filepath_stat)
+
+        # write filtered sequence
         write_fasta_length(filepath_in, filepath_out, good_length_storing[f])
 
 exit()
