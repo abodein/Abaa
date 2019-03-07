@@ -13,7 +13,7 @@ __version__ = 0.1
 __author__ = "Antoine Bodein"
 
 # regex
-fasta_reg = re.compile(r"(?i)\.fa$|\.fasta$")
+fasta_reg = re.compile(r"(?i)\.fa$|\.fasta$|\.fna$")
 
 
 def read_params(args):
@@ -101,7 +101,7 @@ def check_input(input_filepath):
 
     if not [f for f in os.listdir(input_filepath) if fasta_reg.search(f)]:
         # identify .fa or .fasta file
-        exit("Error: <input dir> contains any .fa or .fasta files.")
+        exit("Error: <input dir> contains any .fa, .fasta or .fna files.")
 
 
 def check_output(output_filepath, force):
